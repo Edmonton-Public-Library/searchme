@@ -290,25 +290,28 @@ sub init
     my $opt_string = 'ADFiMQtx?:';
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
-    create_inverted_index( $MASTER_HASH_TABLE ) if ( $opt{'i'} );  # Create index.
 	if ( $opt{'F'} )
 	{
 		push @SEARCH_DIRS, $BASE_SEARCH_DIR; # Where to start the search.
+		create_inverted_index( $MASTER_HASH_TABLE );
 	}
 	elsif ( $opt{'Q'} )
 	{
 		push @SEARCH_DIRS, $BIN_CUST_DIR;
 		push @SEARCH_DIRS, $EPL_JOB_DIR;
+		create_inverted_index( $MASTER_HASH_TABLE );
 	}
 	elsif ( $opt{'A'} )
 	{
 		push @SEARCH_DIRS, "/s/sirsi/Unicorn/EPLwork/anisbet";
+		create_inverted_index( $MASTER_HASH_TABLE );
 	}
-	else
+	elsif ( $opt{'i'} )
 	{
 		push @SEARCH_DIRS, $BIN_DIR;
 		push @SEARCH_DIRS, $BIN_CUST_DIR;
 		push @SEARCH_DIRS, $EPL_JOB_DIR;
+		create_inverted_index( $MASTER_HASH_TABLE );
 	}
 }
 
