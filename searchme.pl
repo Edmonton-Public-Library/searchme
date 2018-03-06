@@ -154,13 +154,18 @@ sub readTable( $$ )  ## Needs to be reworked to de-serialize arrays from file.
 		{
 			my $line = $_;
 			chomp $line;
-			my ( $key, $value ) = split ':', $line;
+			my ( $key, $value ) = split '=>', $line;
 			if ( defined $key && defined $value )
 			{
-				@{$table->{ $key }} = split ',', $value;
+				$table->{ $key } = $value;
 			}
 		}
 		close TABLE_FH;
+	}
+	else
+	{
+		printf STDERR "*** error opening '$fileName', it doesn't seem to exist.\n";
+		printf STDERR "Try re-running application with '-i' to create a new index.\n";
 	}
 }
 
@@ -202,7 +207,31 @@ sub create_inverted_index( $ )
 		printf STDERR "\n\n'%s'=>'%s'\n", $key, $index->{$key};
 		# 'PASSED'=>'/s/sirsi/Unicorn/EPLwork/anisbet/WriteOffs/writeoff.pl:/s/sirsi/Unicorn/EPLwork/anisbet/Sip2/sip2cemu.pl'
 	}
-	printf STDERR "%d keys written to index.\n", writeSortedTable( "index", $index );
+	printf STDERR "%d keys written to index.\n", writeSortedTable( $MASTER_INV_FILE, $index );
+}
+
+# Search the table for the terms.
+# param:  search term string.
+# param:  index (hash table reference).
+# return: none.
+sub do_search( $$ )
+{
+	my $query          = shift;
+	my $inverted_index = shift;
+	my @keys = keys %{$inverted_index};
+	$query = uc $query;
+	my @matches = grep /($query)/, @keys;
+	my $output_result = '';
+	foreach my $match ( @matches )
+	{
+		my @multi_match_file_names = split ':', $inverted_index->{$match};
+		foreach my $multi_file_name ( @multi_match_file_names )
+		{
+			$output_result .= sprintf "%s\n", $multi_file_name;
+		}
+	}
+	my $result = `echo "$output_result" | pipe.pl -dc0 -zc0`;
+	printf "%s", $result;
 }
 
 # Kicks off the setting of various switches.
@@ -218,7 +247,17 @@ sub init
 
 init();
 ### code starts
-
+# Read in the index.
+if ( -s $MASTER_INV_FILE )
+{
+	readTable( $MASTER_INV_FILE, $MASTER_HASH_TABLE );
+}
+else # Rebuild the index.
+{
+	printf STDERR "rebuilding index.\n";
+	create_inverted_index( $MASTER_HASH_TABLE );
+}
+do_search( $opt{'?'}, $MASTER_HASH_TABLE );
 ### code ends
 clean_up();
 # EOF
