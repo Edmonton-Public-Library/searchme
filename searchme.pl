@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          0.1 - Initial release. 
 #          0.0 - Dev. 
 #
 ###############################################################################
@@ -43,7 +44,7 @@ use Getopt::Std;
 $ENV{'PATH'}  = qq{:/s/sirsi/Unicorn/Bincustom:/s/sirsi/Unicorn/Bin:/usr/bin:/usr/sbin};
 $ENV{'UPATH'} = qq{/s/sirsi/Unicorn/Config/upath};
 ###############################################################################
-my $VERSION            = qq{0.0};
+my $VERSION            = qq{0.1};
 chomp( my $TEMP_DIR    = `getpathname tmp` );
 chomp( my $TIME        = `date +%H%M%S` );
 chomp ( my $DATE       = `date +%Y%m%d` );
@@ -61,16 +62,19 @@ sub usage()
 {
     print STDERR << "EOF";
 
-	usage: $0 [-xt]
+	usage: $0 [-DiMtx?{term}]
 Allows all custom scripts and reports to be indexed and searchable based on keyword search.
 
+ -D: Debug mode.
  -i: Create an index of search terms.
  -?{term}: Search for files that contain the word {term}.
+ -M: Show similar matching terms.
  -t: Preserve temporary files in $TEMP_DIR.
  -x: This (help) message.
 
 example:
-  $0 -x
+  $0 -i # to build an inverted index.
+  $0 -?password # Show all the Perl and shell scripts that contain the word 'password'.
 Version: $VERSION
 EOF
     exit;
@@ -187,7 +191,7 @@ sub create_inverted_index( $ )
 	$results = '';
 	foreach my $file ( @files )
 	{
-		printf STDERR "indexing file: '%s'\n", $file;
+		printf STDERR "indexing file: '%s'\n", $file if ( $opt{'D'} );
 		$results = `cat $file | $PIPE -W"(\\s+|\\.)" -h',' -nany | $PIPE -W',' -K | $PIPE -dc0 -zc0`;
 		my @keywords = split '\n', $results;
 		foreach my $keyword ( @keywords )
@@ -202,12 +206,15 @@ sub create_inverted_index( $ )
 			}
 		}
 	}
-	foreach my $key ( keys %{$index} )
+	if ( $opt{'D'} )
 	{
-		printf STDERR "\n\n'%s'=>'%s'\n", $key, $index->{$key};
-		# 'PASSED'=>'/s/sirsi/Unicorn/EPLwork/anisbet/WriteOffs/writeoff.pl:/s/sirsi/Unicorn/EPLwork/anisbet/Sip2/sip2cemu.pl'
+		foreach my $key ( keys %{$index} )
+		{
+			printf STDERR "\n\n'%s'=>'%s'\n", $key, $index->{$key};
+			# 'PASSED'=>'/s/sirsi/Unicorn/EPLwork/anisbet/WriteOffs/writeoff.pl:/s/sirsi/Unicorn/EPLwork/anisbet/Sip2/sip2cemu.pl'
+		}
+		printf STDERR "%d keys written to index.\n", writeSortedTable( $MASTER_INV_FILE, $index );
 	}
-	printf STDERR "%d keys written to index.\n", writeSortedTable( $MASTER_INV_FILE, $index );
 }
 
 # Search the table for the terms.
@@ -221,17 +228,34 @@ sub do_search( $$ )
 	my @keys = keys %{$inverted_index};
 	$query = uc $query;
 	my @matches = grep /($query)/, @keys;
-	my $output_result = '';
+	my $output_result = {};
 	foreach my $match ( @matches )
 	{
 		my @multi_match_file_names = split ':', $inverted_index->{$match};
 		foreach my $multi_file_name ( @multi_match_file_names )
 		{
-			$output_result .= sprintf "%s\n", $multi_file_name;
+			if ( exists $output_result->{$multi_file_name} && defined $multi_file_name )
+			{
+				$output_result->{$multi_file_name} .= ":" . $match;
+			}
+			else
+			{
+				$output_result->{$multi_file_name} = $match;
+			}
 		}
 	}
-	my $result = `echo "$output_result" | pipe.pl -dc0 -zc0`;
-	printf "%s", $result;
+	# Display results. 
+	foreach my $key ( keys %{$output_result} )
+	{
+		if ( $opt{'M'} ) # show match words.
+		{
+			printf "%s::%s\n", $key, $output_result->{ $key };
+		}
+		else
+		{
+			printf "%s\n", $key;
+		}
+	}
 }
 
 # Kicks off the setting of various switches.
@@ -239,7 +263,7 @@ sub do_search( $$ )
 # return: 
 sub init
 {
-    my $opt_string = 'itx?:';
+    my $opt_string = 'DiMtx?:';
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
     create_inverted_index( $MASTER_HASH_TABLE ) if ( $opt{'i'} );  # Create index.
@@ -256,6 +280,7 @@ else # Rebuild the index.
 {
 	printf STDERR "rebuilding index.\n";
 	create_inverted_index( $MASTER_HASH_TABLE );
+	printf STDERR "done.\n";
 }
 do_search( $opt{'?'}, $MASTER_HASH_TABLE );
 ### code ends
