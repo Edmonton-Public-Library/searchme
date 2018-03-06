@@ -233,7 +233,7 @@ sub create_inverted_index( $ )
 	{
 		foreach my $key ( keys %{$index} )
 		{
-			printf STDERR "\n\n'%s'=>'%s'\n", $key, $index->{$key};
+			printf STDERR "'%s'=>'%s'\n", $key, $index->{$key};
 			# 'PASSED'=>'/s/sirsi/Unicorn/EPLwork/anisbet/WriteOffs/writeoff.pl:/s/sirsi/Unicorn/EPLwork/anisbet/Sip2/sip2cemu.pl'
 		}
 		printf STDERR "%d keys written to index.\n", writeSortedTable( $MASTER_INV_FILE, $index );
