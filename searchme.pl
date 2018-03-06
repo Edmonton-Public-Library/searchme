@@ -3,7 +3,8 @@
 #
 # Perl source file for project searchme 
 #
-# <one line to give the program's name and a brief idea of what it does.>
+# Allows searching of all custom scripts for key words.
+#
 #    Copyright (C) 2018  Andrew Nisbet, Edmonton Public Library
 # The Edmonton Public Library respectfully acknowledges that we sit on
 # Treaty 6 territory, traditional lands of First Nations and Metis people.
@@ -50,6 +51,8 @@ my @CLEAN_UP_FILE_LIST = (); # List of file names that will be deleted at the en
 chomp( my $BINCUSTOM   = `getpathname bincustom` );
 my $PIPE               = "$BINCUSTOM/pipe.pl";
 chomp( my $CURRENT_DIR = `pwd` );
+my $MASTER_HASH_TABLE  = {};
+my $MASTER_INV_FILE    = "$TEMP_DIR/search_inverted_index.idx";
 
 #
 # Message about this program and how to use it.
@@ -59,9 +62,10 @@ sub usage()
     print STDERR << "EOF";
 
 	usage: $0 [-xt]
-Usage notes for searchme.pl.
-Transactions can be found in .
+Allows all custom scripts and reports to be indexed and searchable based on keyword search.
 
+ -i: Create an index of search terms.
+ -?{term}: Search for files that contain the word {term}.
  -t: Preserve temporary files in $TEMP_DIR.
  -x: This (help) message.
 
@@ -70,21 +74,6 @@ example:
 Version: $VERSION
 EOF
     exit;
-}
-
-# Logs an arbitrary set of strings to the log file. The log file is defined above and is never clobbered.
-# params:  Strings or array of message strings. All params will be converted to strings for output.
-# return:
-sub logit
-{
-	my $log = $CURRENT_DIR . "/$0.log";
-	chomp( my $date_time = `date +%Y-%m-%d_%H:%M:%S` );
-	open( my $handle, ">>", $log ) or die( "** error opening log file '$log', $!\n" );
-	foreach my $line ( @_ )
-	{
-		print { $handle } sprintf "[%s] %s\n", $date_time, $line;
-	}
-	close( $handle );
 }
 
 # Removes all the temp files created during running of the script.
@@ -96,14 +85,14 @@ sub clean_up
 	{
 		if ( $opt{'t'} )
 		{
-			logit( sprintf( "preserving file '%s' for review.", $file ) );
+			printf STDERR "preserving file '%s' for review.\n", $file;
 		}
 		else
 		{
 			if ( -e  )
 			{
 				unlink $file;
-				logit( sprintf( "removed '%s'", $file ) );
+				printf STDERR "removed '%s'\n", $file;
 			}
 		}
 	}
@@ -128,10 +117,92 @@ sub create_tmp_file( $$ )
 	if ( grep( !/^($master_file)/, @CLEAN_UP_FILE_LIST ) )
 	{
 		# Add it to the list of files to clean if required at the end.
-		push \@CLEAN_UP_FILE_LIST, $master_file;
+		push @CLEAN_UP_FILE_LIST, $master_file;
 	}
-	logit( sprintf( "creating temp file '%s'", $master_file ) );
 	return $master_file;
+}
+
+# Writes the contents of a hash reference to file. Values are not stored.
+# param:  file name string - path of file to write to.
+# param:  table hash reference - data to write to file.
+# return: the number of items written to file.
+sub writeSortedTable( $$ )  ## Needs to be reworked to serialize arrays to file.
+{
+	my $fileName = shift;
+	my $table    = shift;
+	open TABLE, ">$fileName" or die "Serialization error writing '$fileName' $!\n";
+	for my $key ( sort keys %{$table} )
+	{
+		print TABLE $key."=>".$table->{$key}."\n";
+	}
+	close TABLE;
+	return scalar keys %$table;
+}
+
+# Reads the contents of a file into a hash reference.
+# param:  file name string - path of file to write to.
+# param:  Hash reference to place the data into.
+# return: hash reference - table data.
+sub readTable( $$ )  ## Needs to be reworked to de-serialize arrays from file.
+{
+	my ( $fileName ) = shift;
+	my ( $table )    = shift;
+	if ( -e $fileName )
+	{
+		open TABLE_FH, "<$fileName" or die "Serialization error reading '$fileName' $!\n";
+		while ( <TABLE_FH> )
+		{
+			my $line = $_;
+			chomp $line;
+			my ( $key, $value ) = split ':', $line;
+			if ( defined $key && defined $value )
+			{
+				@{$table->{ $key }} = split ',', $value;
+			}
+		}
+		close TABLE_FH;
+	}
+}
+
+# Go to all the directories under /s/sirsi/Unicorn and create a list of scripts.
+# Read each line by line and parse out all words and create a key of the word and
+# value of a list of fully qualified path name of the file it was found in. The name
+# of the file should also be a keyword in the hash. As you find a pre-existing key
+# add the new file name to the stored list. All keys should be in lower case, values
+# must be as is.
+# Example: 'juv' -> ('./hello.sh', './searchme.sh', './fuzzywuzzy.pl')
+# param:  Inverted hash table (reference to a hashmap).
+# return: None, but fills the hashmap with lists of file names that contain the same words.
+sub create_inverted_index( $ )
+{
+	my $index = shift;
+	my $results = `find /s/sirsi/Unicorn/EPLwork/anisbet -name "*.sh"`;
+	$results   .= `find /s/sirsi/Unicorn/EPLwork/anisbet -name "*.pl"`;
+	my @files = split '\n', $results;
+	$results = '';
+	foreach my $file ( @files )
+	{
+		printf STDERR "indexing file: '%s'\n", $file;
+		$results = `cat $file | $PIPE -W"(\\s+|\\.)" -h',' -nany | $PIPE -W',' -K | $PIPE -dc0 -zc0`;
+		my @keywords = split '\n', $results;
+		foreach my $keyword ( @keywords )
+		{
+			if ( exists $index->{ $keyword } )
+			{
+				$index->{ $keyword } .= ":$file";
+			}
+			else
+			{
+				$index->{ $keyword } = "$file";
+			}
+		}
+	}
+	foreach my $key ( keys %{$index} )
+	{
+		printf STDERR "\n\n'%s'=>'%s'\n", $key, $index->{$key};
+		# 'PASSED'=>'/s/sirsi/Unicorn/EPLwork/anisbet/WriteOffs/writeoff.pl:/s/sirsi/Unicorn/EPLwork/anisbet/Sip2/sip2cemu.pl'
+	}
+	printf STDERR "%d keys written to index.\n", writeSortedTable( "index", $index );
 }
 
 # Kicks off the setting of various switches.
@@ -139,13 +210,13 @@ sub create_tmp_file( $$ )
 # return: 
 sub init
 {
-    my $opt_string = 'tx';
-    getopts( "$opt_string", %opt ) or usage();
+    my $opt_string = 'itx?:';
+    getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
+    create_inverted_index( $MASTER_HASH_TABLE ) if ( $opt{'i'} );  # Create index.
 }
 
 init();
-
 ### code starts
 
 ### code ends
