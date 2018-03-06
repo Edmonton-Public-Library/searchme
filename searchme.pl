@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          0.2 - Add -F for full indexing or -Q for quick index of EPLwork.
 #          0.1 - Initial release. 
 #          0.0 - Dev. 
 #
@@ -44,7 +45,7 @@ use Getopt::Std;
 $ENV{'PATH'}  = qq{:/s/sirsi/Unicorn/Bincustom:/s/sirsi/Unicorn/Bin:/usr/bin:/usr/sbin};
 $ENV{'UPATH'} = qq{/s/sirsi/Unicorn/Config/upath};
 ###############################################################################
-my $VERSION            = qq{0.1};
+my $VERSION            = qq{0.2};
 chomp( my $TEMP_DIR    = `getpathname tmp` );
 chomp( my $TIME        = `date +%H%M%S` );
 chomp ( my $DATE       = `date +%Y%m%d` );
@@ -54,6 +55,11 @@ my $PIPE               = "$BINCUSTOM/pipe.pl";
 chomp( my $CURRENT_DIR = `pwd` );
 my $MASTER_HASH_TABLE  = {};
 my $MASTER_INV_FILE    = "$TEMP_DIR/search_inverted_index.idx";
+my $BASE_SEARCH_DIR    = "/s/sirsi/Unicorn"; # Where to start the search.
+chomp( my $BIN_DIR     = `getpathname bin` );
+chomp( my $BIN_CUST_DIR= `getpathname bincustom` );
+my $EPL_JOB_DIR        = "/s/sirsi/Unicorn/EPLwork";
+my @SEARCH_DIRS        = ();
 
 #
 # Message about this program and how to use it.
@@ -62,19 +68,24 @@ sub usage()
 {
     print STDERR << "EOF";
 
-	usage: $0 [-DiMtx?{term}]
+	usage: $0 [-ADiMQtx?{term}]
 Allows all custom scripts and reports to be indexed and searchable based on keyword search.
 
+ -A: Just search Andrew's stuff. Wipes any previously existing index though.
+     Checks in $EPL_JOB_DIR/anisbet dirs recursively.
  -D: Debug mode.
- -i: Create an index of search terms.
+ -F: Build a complete full index. Otherwise look for scripts in the usual directories.
+    Checks everything under $BASE_SEARCH_DIR recursively.
+ -i: Create an index of search terms. Checks in $BIN_DIR, $BIN_CUST_DIR, and $EPL_JOB_DIR dirs recursively.
  -?{term}: Search for files that contain the word {term}.
  -M: Show similar matching terms.
+ -Q: Quick index of all scripts under $BIN_CUST_DIR and $EPL_JOB_DIR.
  -t: Preserve temporary files in $TEMP_DIR.
  -x: This (help) message.
 
 example:
   $0 -i # to build an inverted index.
-  $0 -?password # Show all the Perl and shell scripts that contain the word 'password'.
+  $0 -?password # Show all the scripts that contain the word 'password'.
 Version: $VERSION
 EOF
     exit;
@@ -185,13 +196,25 @@ sub readTable( $$ )  ## Needs to be reworked to de-serialize arrays from file.
 sub create_inverted_index( $ )
 {
 	my $index = shift;
-	my $results = `find /s/sirsi/Unicorn/EPLwork/anisbet -name "*.sh"`;
-	$results   .= `find /s/sirsi/Unicorn/EPLwork/anisbet -name "*.pl"`;
+	printf STDERR "rebuilding index.\n";
+	my $results = '';
+	foreach my $dir ( @SEARCH_DIRS )
+	{
+		$results  = `find $dir -name "*.sh"`;
+		$results .= `find $dir -name "*.pl"`;
+	}
 	my @files = split '\n', $results;
 	$results = '';
 	foreach my $file ( @files )
 	{
-		printf STDERR "indexing file: '%s'\n", $file if ( $opt{'D'} );
+		if ( $opt{'D'} )
+		{
+			printf STDERR "indexing file: '%s'\n", $file;
+		}
+		else
+		{
+			printf STDERR ".";
+		}
 		$results = `cat $file | $PIPE -W"(\\s+|\\.)" -h',' -nany | $PIPE -W',' -K | $PIPE -dc0 -zc0`;
 		my @keywords = split '\n', $results;
 		foreach my $keyword ( @keywords )
@@ -215,6 +238,7 @@ sub create_inverted_index( $ )
 		}
 		printf STDERR "%d keys written to index.\n", writeSortedTable( $MASTER_INV_FILE, $index );
 	}
+	printf STDERR "done.\n";
 }
 
 # Search the table for the terms.
@@ -263,10 +287,29 @@ sub do_search( $$ )
 # return: 
 sub init
 {
-    my $opt_string = 'DiMtx?:';
+    my $opt_string = 'ADFiMQtx?:';
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
     create_inverted_index( $MASTER_HASH_TABLE ) if ( $opt{'i'} );  # Create index.
+	if ( $opt{'F'} )
+	{
+		push @SEARCH_DIRS, $BASE_SEARCH_DIR; # Where to start the search.
+	}
+	elsif ( $opt{'Q'} )
+	{
+		push @SEARCH_DIRS, $BIN_CUST_DIR;
+		push @SEARCH_DIRS, $EPL_JOB_DIR;
+	}
+	elsif ( $opt{'A'} )
+	{
+		push @SEARCH_DIRS, "/s/sirsi/Unicorn/EPLwork/anisbet";
+	}
+	else
+	{
+		push @SEARCH_DIRS, $BIN_DIR;
+		push @SEARCH_DIRS, $BIN_CUST_DIR;
+		push @SEARCH_DIRS, $EPL_JOB_DIR;
+	}
 }
 
 init();
@@ -278,9 +321,7 @@ if ( -s $MASTER_INV_FILE )
 }
 else # Rebuild the index.
 {
-	printf STDERR "rebuilding index.\n";
 	create_inverted_index( $MASTER_HASH_TABLE );
-	printf STDERR "done.\n";
 }
 do_search( $opt{'?'}, $MASTER_HASH_TABLE );
 ### code ends
