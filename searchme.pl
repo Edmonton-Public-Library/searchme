@@ -324,6 +324,8 @@ if ( -s $MASTER_INV_FILE )
 }
 else # Rebuild the index.
 {
+	push @SEARCH_DIRS, $BIN_CUST_DIR;
+	push @SEARCH_DIRS, $EPL_JOB_DIR;
 	create_inverted_index( $MASTER_HASH_TABLE );
 }
 do_search( $opt{'?'}, $MASTER_HASH_TABLE );
