@@ -27,12 +27,15 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
-#          1.2 - Ordered result output.
+#          1.3 - Change how to specify multiple start directories.
+#          1.2 - Ordered, ranked result output.
 #          1.1 - Multiple terms refines search.
-#          1.0 - Removing all hardcoded dir flags in favour of -I.
+#          1.0 - Removing all hard-coded directory flags in favour of -I.
 #          0.2 - Add -F for full indexing or -Q for quick index of EPLwork.
 #          0.1 - Initial release. 
-#          0.0 - Dev. 
+#          0.0 - Dev.
+# Dependencies: 
+#  pipe.pl
 #
 ###############################################################################
 
@@ -41,7 +44,7 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-my $VERSION            = qq{1.2};
+my $VERSION            = qq{1.3};
 my $TEMP_DIR           = "/tmp";
 my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
@@ -56,19 +59,29 @@ sub usage()
 {
     print STDERR << "EOF";
 
-	usage: $0 [-DiI{dirs}Mx?{term}]
-Allows all custom scripts and reports to be indexed and searchable based on keyword search.
+	usage: $0 [-DiI{dirs}Mx?{search terms}]
+Allows search of any keywords from scripts (*.sh and *.pl).
 
- -D: Debug mode.
+An inverted index is created, if one doesn't already exist in $TEMP_DIR, or the -i, or -I 
+flag are specified. If -i is used, search starts in $HOME, which could take a while. Optionally
+you can specify a starting directory, and all scripts in that directory and all others
+below it will be indexed.
+
+Once the index is created, searchme will use multiple search terms to narrow searches for key
+words that exist within scripts. 
+
+ -?{term1 term2 termN}: Output files that contain all the search terms in order from most likely to least.
+ -D: Debug mode. Prints additional information to STDERR.
  -i: Create an index of search terms. Checks in $HOME dirs recursively.
- -I{dir1,dir2,...,dirN}: Create an index of search terms, recursively from specified directories.
- -?{term}: Search for files that contain the word {term}.
- -M: Show similar matching terms.
+ -I{dir1 dir2 dirN}: Create an index of search terms, recursively from specified directories.
+ -M: Show ranking, pipe delimited on output to STDOUT.
  -x: This (help) message.
 
 example:
-  $0 -i # to build an inverted index.
-  $0 -?password # Show all the scripts that contain the word 'password'.
+  searchme.pl -i # to build an inverted index staring in $HOME.
+  searchme.pl -I"/s/sirsi/Unicorn/EPLwork/anisbet /s/sirsi/Unicorn/Bincustom" # to build an inverted index from here.
+  searchme.pl -?password # Show all the scripts that contain the word 'password'.
+  searchme.pl -?"juv soleil" # only files that contain all terms are output.
 Version: $VERSION
 EOF
     exit;
@@ -185,7 +198,6 @@ sub create_inverted_index( $ )
 	printf STDERR "done.\n";
 }
 
-
 # Search the table for the terms.
 # param:  search term string.
 # param:  index (hash table reference).
@@ -244,7 +256,7 @@ sub do_search( $$ )
 			last; # end early because they are ordered.
 		}
 	}
-	printf STDERR "%d results found for %s.\n", $count, join ', ', @queries;
+	printf STDERR "%d results found for %s.\n", $count, join ', ', @queries if ( $opt{'D'} );
 }
 
 # Kicks off the setting of various switches.
@@ -262,7 +274,7 @@ sub init
 	}
 	elsif ( $opt{'I'} )
 	{
-		push @SEARCH_DIRS, split( ',\s+', $opt{'I'} );
+		push @SEARCH_DIRS, split( '\s+', $opt{'I'} );
 		create_inverted_index( $MASTER_HASH_TABLE );
 	}
 }
