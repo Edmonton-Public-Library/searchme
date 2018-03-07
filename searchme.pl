@@ -196,68 +196,55 @@ sub do_search( $$ )
 	my $inverted_index = shift;
 	my @inverted_keys = keys %{$inverted_index};
 	my @queries = split '\s+', $query;
-	my $matches_buffer = {};
-	while ( @queries )
+	my $reverse_inverted_index = {};
+	# Break apart the query words, and make a reverse inverted index of files keys and keyword matches.
+	foreach my $q ( @queries )
 	{
-		my $q = shift @queries;
-		printf STDERR "Search term '%s' \n", $q;
 		if ( defined $q )
 		{
 			my @matches = grep /($q)/i, @inverted_keys;
 			foreach my $match ( @matches )
 			{
-				if ( ! exists $matches_buffer->{ $match } )
+				# Get the value which is the files from the inverted index.
+				my @files = split ':', $inverted_index->{$match};
+				foreach my $file ( @files )
 				{
-					$matches_buffer->{ $match } = 1;
-				}
-				else
-				{
-					$matches_buffer->{ $match } += 1;
+					if ( exists $reverse_inverted_index->{ $file } )
+					{
+						$reverse_inverted_index->{ $file } += 1;
+					}
+					else
+					{
+						$reverse_inverted_index->{ $file } = 1;
+					}
 				}
 			}
 		}
 	}
+	# $inverted_index->{"k1"} = "f1:f2:f3";
+	# $inverted_index->{"k2"} = "f3";
+	# $reverse_inverted_index->{ f1 } = "3";
+	# $reverse_inverted_index->{ f2 } = "1";
+	# $reverse_inverted_index->{ f3 } = "2";
 	my $output_result = {};
-	foreach my $match ( %{$matches_buffer} )
-	{
-		my @multi_match_file_names = split ':', $inverted_index->{$match};
-		foreach my $multi_file_name ( @multi_match_file_names )
-		{
-			if ( exists $output_result->{$multi_file_name} && defined $multi_file_name )
-			{
-				$output_result->{$multi_file_name} .= ":" . $match;
-			}
-			else
-			{
-				$output_result->{$multi_file_name} = $match;
-			}
-		}
-	}
 	# Display results.
-	# This hashmap now contains all the keywords that match the query, and the count of occurrences.
-	# To output in order we can order by hit count, then 
-	my @keys = sort { $matches_buffer->{$a} <=> $matches_buffer->{$b} } keys(%$matches_buffer);
-	my @vals = @{$inverted_index}{@keys};
-	@vals = reverse @vals;
-	my $uniq_hash_ref = {};
-	my $counter       = 1;
-	foreach my $key ( @vals )
-	{
-		$uniq_hash_ref->{ $key } = $counter++;
-	}
-	printf STDERR "found %d matches\n", scalar keys %{$uniq_hash_ref};
-	@keys = sort { $uniq_hash_ref->{$a} <=> $uniq_hash_ref->{$b} } keys(%$uniq_hash_ref);
+	my @keys = sort { $reverse_inverted_index->{$a} <=> $reverse_inverted_index->{$b} } keys(%$reverse_inverted_index);
+	@keys = reverse @keys;
+	my $count = 0;
 	foreach my $key ( @keys )
 	{
-		if ( $opt{'M'} ) # show match words.
+		if ( $reverse_inverted_index->{ $key } >= scalar @queries )
 		{
-			printf "%s::%s\n", $key, $output_result->{ $key };
+			printf "%d|", $reverse_inverted_index->{ $key } if ( $opt{'M'} );
+			printf "%s\n", $key;
+			$count++;
 		}
 		else
 		{
-			printf "%s\n", $key;
+			last; # end early because they are ordered.
 		}
 	}
+	printf STDERR "%d results found for %s.\n", $count, join ', ', @queries;
 }
 
 # Kicks off the setting of various switches.
