@@ -135,8 +135,15 @@ sub create_inverted_index( $ )
 	my $results = '';
 	foreach my $dir ( @SEARCH_DIRS )
 	{
-		$results  = `find $dir -name "*.sh"`;
-		$results .= `find $dir -name "*.pl"`;
+		if ( -e $dir )
+		{
+			$results  = `find $dir -name "*.sh"`;
+			$results .= `find $dir -name "*.pl"`;
+		}
+		else
+		{
+			printf STDERR "** error indexing directory: '%s'\n", $dir;
+		}
 	}
 	my @files = split '\n', $results;
 	$results = '';
