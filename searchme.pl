@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          1.4 - Fix multiple start directories selection.
 #          1.3 - Change how to specify multiple start directories.
 #          1.2 - Ordered, ranked result output.
 #          1.1 - Multiple terms refines search.
@@ -44,7 +45,7 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-my $VERSION            = qq{1.3};
+my $VERSION            = qq{1.4};
 my $TEMP_DIR           = "/tmp";
 my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
@@ -150,9 +151,10 @@ sub create_inverted_index( $ )
 	my $results = '';
 	foreach my $dir ( @SEARCH_DIRS )
 	{
-		if ( -e $dir )
+		if ( -d $dir )
 		{
-			$results  = `find $dir -name "*.sh"`;
+			printf STDERR "indexing directory: '%s'\n", $dir if ( $opt{'D'} );
+			$results .= `find $dir -name "*.sh"`;
 			$results .= `find $dir -name "*.pl"`;
 		}
 		else
@@ -190,9 +192,9 @@ sub create_inverted_index( $ )
 	{
 		foreach my $key ( keys %{$index} )
 		{
-			printf STDERR "'%s'=>'%s'\n", $key, $index->{$key};
-			# 'PASSED'=>'/s/sirsi/Unicorn/EPLwork/anisbet/WriteOffs/writeoff.pl:/s/sirsi/Unicorn/EPLwork/anisbet/Sip2/sip2cemu.pl'
+			printf STDERR "'%s', ", $key;
 		}
+		printf STDERR "\n";
 	}
 	printf STDERR "%d keys written to index.\n", writeSortedTable( $MASTER_INV_FILE, $index );
 	printf STDERR "done.\n";
