@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          1.1 - Multiple terms refines search.
 #          1.0 - Removing all hardcoded dir flags in favour of -I.
 #          0.2 - Add -F for full indexing or -Q for quick index of EPLwork.
 #          0.1 - Initial release. 
@@ -39,7 +40,7 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-my $VERSION            = qq{1.0};
+my $VERSION            = qq{1.1};
 my $TEMP_DIR           = "/tmp";
 my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
@@ -183,6 +184,7 @@ sub create_inverted_index( $ )
 	printf STDERR "done.\n";
 }
 
+
 # Search the table for the terms.
 # param:  search term string.
 # param:  index (hash table reference).
@@ -191,10 +193,31 @@ sub do_search( $$ )
 {
 	my $query          = shift;
 	my $inverted_index = shift;
-	my @keys = keys %{$inverted_index};
-	my @matches = grep /($query)/i, @keys;
+	my @inverted_keys = keys %{$inverted_index};
+	my @queries = split '\s+', $query;
+	my $matches_buffer = {};
+	while ( @queries )
+	{
+		my $q = shift @queries;
+		printf STDERR "Search term '%s' \n", $q;
+		if ( defined $q )
+		{
+			my @matches = grep /($q)/i, @inverted_keys;
+			foreach my $match ( @matches )
+			{
+				if ( ! exists $matches_buffer->{ $match } )
+				{
+					$matches_buffer->{ $match } = 1;
+				}
+				else
+				{
+					$matches_buffer->{ $match } += 1;
+				}
+			}
+		}
+	}
 	my $output_result = {};
-	foreach my $match ( @matches )
+	foreach my $match ( %{$matches_buffer} )
 	{
 		my @multi_match_file_names = split ':', $inverted_index->{$match};
 		foreach my $multi_file_name ( @multi_match_file_names )
@@ -209,8 +232,21 @@ sub do_search( $$ )
 			}
 		}
 	}
-	# Display results. 
-	foreach my $key ( keys %{$output_result} )
+	# Display results.
+	# This hashmap now contains all the keywords that match the query, and the count of occurrences.
+	# To output in order we can order by hit count, then 
+	my @keys = sort { $matches_buffer->{$a} <=> $matches_buffer->{$b} } keys(%$matches_buffer);
+	my @vals = @{$inverted_index}{@keys};
+	@vals = reverse @vals;
+	my $uniq_hash_ref = {};
+	my $counter       = 1;
+	foreach my $key ( @vals )
+	{
+		$uniq_hash_ref->{ $key } = $counter++;
+	}
+	printf STDERR "found %d matches\n", scalar keys %{$uniq_hash_ref};
+	@keys = sort { $uniq_hash_ref->{$a} <=> $uniq_hash_ref->{$b} } keys(%$uniq_hash_ref);
+	foreach my $key ( @keys )
 	{
 		if ( $opt{'M'} ) # show match words.
 		{
