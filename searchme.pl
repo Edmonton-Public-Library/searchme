@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          1.0 - Removing all hardcoded dir flags in favour of -I.
 #          0.2 - Add -F for full indexing or -Q for quick index of EPLwork.
 #          0.1 - Initial release. 
 #          0.0 - Dev. 
@@ -38,27 +39,12 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-# Environment setup required by cron to run script because its daemon runs
-# without assuming any environment settings and we need to use sirsi's.
-###############################################################################
-# *** Edit these to suit your environment *** #
-$ENV{'PATH'}  = qq{:/s/sirsi/Unicorn/Bincustom:/s/sirsi/Unicorn/Bin:/usr/bin:/usr/sbin};
-$ENV{'UPATH'} = qq{/s/sirsi/Unicorn/Config/upath};
-###############################################################################
-my $VERSION            = qq{0.2};
-chomp( my $TEMP_DIR    = `getpathname tmp` );
-chomp( my $TIME        = `date +%H%M%S` );
-chomp ( my $DATE       = `date +%Y%m%d` );
-my @CLEAN_UP_FILE_LIST = (); # List of file names that will be deleted at the end of the script if ! '-t'.
-chomp( my $BINCUSTOM   = `getpathname bincustom` );
-my $PIPE               = "$BINCUSTOM/pipe.pl";
-chomp( my $CURRENT_DIR = `pwd` );
+my $VERSION            = qq{1.0};
+my $TEMP_DIR           = "/tmp";
+my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
 my $MASTER_INV_FILE    = "$TEMP_DIR/search_inverted_index.idx";
-my $BASE_SEARCH_DIR    = "/s/sirsi/Unicorn"; # Where to start the search.
-chomp( my $BIN_DIR     = `getpathname bin` );
-chomp( my $BIN_CUST_DIR= `getpathname bincustom` );
-my $EPL_JOB_DIR        = "/s/sirsi/Unicorn/EPLwork";
+chomp( my $HOME        = `env | egrep -e '^HOME=' | pipe.pl -W'=' -oc1` ); # Where to start the search.
 my @SEARCH_DIRS        = ();
 
 #
@@ -68,19 +54,14 @@ sub usage()
 {
     print STDERR << "EOF";
 
-	usage: $0 [-ADiMQtx?{term}]
+	usage: $0 [-DiI{dirs}Mx?{term}]
 Allows all custom scripts and reports to be indexed and searchable based on keyword search.
 
- -A: Just search Andrew's stuff. Wipes any previously existing index though.
-     Checks in $EPL_JOB_DIR/anisbet dirs recursively.
  -D: Debug mode.
- -F: Build a complete full index. Otherwise look for scripts in the usual directories.
-    Checks everything under $BASE_SEARCH_DIR recursively.
- -i: Create an index of search terms. Checks in $BIN_DIR, $BIN_CUST_DIR, and $EPL_JOB_DIR dirs recursively.
+ -i: Create an index of search terms. Checks in $HOME dirs recursively.
+ -I{dir1,dir2,...,dirN}: Create an index of search terms, recursively from specified directories.
  -?{term}: Search for files that contain the word {term}.
  -M: Show similar matching terms.
- -Q: Quick index of all scripts under $BIN_CUST_DIR and $EPL_JOB_DIR.
- -t: Preserve temporary files in $TEMP_DIR.
  -x: This (help) message.
 
 example:
@@ -89,52 +70,6 @@ example:
 Version: $VERSION
 EOF
     exit;
-}
-
-# Removes all the temp files created during running of the script.
-# param:  List of all the file names to clean up.
-# return: <none>
-sub clean_up
-{
-	foreach my $file ( @CLEAN_UP_FILE_LIST )
-	{
-		if ( $opt{'t'} )
-		{
-			printf STDERR "preserving file '%s' for review.\n", $file;
-		}
-		else
-		{
-			if ( -e  )
-			{
-				unlink $file;
-				printf STDERR "removed '%s'\n", $file;
-			}
-		}
-	}
-}
-
-# Writes data to a temp file and returns the name of the file with path.
-# param:  unique name of temp file, like master_list.
-# param:  data to write to file.
-# return: name of the file that contains the list.
-sub create_tmp_file( $$ )
-{
-	my $name    = shift;
-	my $results = shift;
-	my $sequence= sprintf "%02d", scalar @CLEAN_UP_FILE_LIST;
-	my $master_file = "$TEMP_DIR/$name.$sequence.$DATE.";
-	# Return just the file name if there are no results to report.
-	return $master_file if ( ! $results );
-	# Adding append here so that 2 commands can output to the same file. Simplifies selections in deactivate.
-	open FH, ">>$master_file" or die "*** error opening '$master_file', $!\n";
-	print FH $results;
-	close FH;
-	if ( grep( !/^($master_file)/, @CLEAN_UP_FILE_LIST ) )
-	{
-		# Add it to the list of files to clean if required at the end.
-		push @CLEAN_UP_FILE_LIST, $master_file;
-	}
-	return $master_file;
 }
 
 # Writes the contents of a hash reference to file. Values are not stored.
@@ -236,8 +171,8 @@ sub create_inverted_index( $ )
 			printf STDERR "'%s'=>'%s'\n", $key, $index->{$key};
 			# 'PASSED'=>'/s/sirsi/Unicorn/EPLwork/anisbet/WriteOffs/writeoff.pl:/s/sirsi/Unicorn/EPLwork/anisbet/Sip2/sip2cemu.pl'
 		}
-		printf STDERR "%d keys written to index.\n", writeSortedTable( $MASTER_INV_FILE, $index );
 	}
+	printf STDERR "%d keys written to index.\n", writeSortedTable( $MASTER_INV_FILE, $index );
 	printf STDERR "done.\n";
 }
 
@@ -250,8 +185,7 @@ sub do_search( $$ )
 	my $query          = shift;
 	my $inverted_index = shift;
 	my @keys = keys %{$inverted_index};
-	$query = uc $query;
-	my @matches = grep /($query)/, @keys;
+	my @matches = grep /($query)/i, @keys;
 	my $output_result = {};
 	foreach my $match ( @matches )
 	{
@@ -287,30 +221,17 @@ sub do_search( $$ )
 # return: 
 sub init
 {
-    my $opt_string = 'ADFiMQtx?:';
+    my $opt_string = 'DiI:Mx?:';
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
-	if ( $opt{'F'} )
+	if ( $opt{'i'} )
 	{
-		push @SEARCH_DIRS, $BASE_SEARCH_DIR; # Where to start the search.
+		push @SEARCH_DIRS, $HOME;
 		create_inverted_index( $MASTER_HASH_TABLE );
 	}
-	elsif ( $opt{'Q'} )
+	elsif ( $opt{'I'} )
 	{
-		push @SEARCH_DIRS, $BIN_CUST_DIR;
-		push @SEARCH_DIRS, $EPL_JOB_DIR;
-		create_inverted_index( $MASTER_HASH_TABLE );
-	}
-	elsif ( $opt{'A'} )
-	{
-		push @SEARCH_DIRS, "/s/sirsi/Unicorn/EPLwork/anisbet";
-		create_inverted_index( $MASTER_HASH_TABLE );
-	}
-	elsif ( $opt{'i'} )
-	{
-		push @SEARCH_DIRS, $BIN_DIR;
-		push @SEARCH_DIRS, $BIN_CUST_DIR;
-		push @SEARCH_DIRS, $EPL_JOB_DIR;
+		push @SEARCH_DIRS, split( ',\s+', $opt{'I'} );
 		create_inverted_index( $MASTER_HASH_TABLE );
 	}
 }
@@ -324,11 +245,9 @@ if ( -s $MASTER_INV_FILE )
 }
 else # Rebuild the index.
 {
-	push @SEARCH_DIRS, $BIN_CUST_DIR;
-	push @SEARCH_DIRS, $EPL_JOB_DIR;
+	push @SEARCH_DIRS, $HOME;
 	create_inverted_index( $MASTER_HASH_TABLE );
 }
-do_search( $opt{'?'}, $MASTER_HASH_TABLE );
+do_search( $opt{'?'}, $MASTER_HASH_TABLE ) if ( $opt{'?'} );
 ### code ends
-clean_up();
 # EOF
