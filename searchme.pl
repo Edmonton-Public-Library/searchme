@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          1.2 - Ordered result output.
 #          1.1 - Multiple terms refines search.
 #          1.0 - Removing all hardcoded dir flags in favour of -I.
 #          0.2 - Add -F for full indexing or -Q for quick index of EPLwork.
@@ -40,7 +41,7 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-my $VERSION            = qq{1.1};
+my $VERSION            = qq{1.2};
 my $TEMP_DIR           = "/tmp";
 my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
