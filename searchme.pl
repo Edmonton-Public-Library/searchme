@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          1.5 - Introduce special file selection types with -s.
 #          1.4 - Fix multiple start directories selection.
 #          1.3 - Change how to specify multiple start directories.
 #          1.2 - Ordered, ranked result output.
@@ -45,7 +46,7 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-my $VERSION            = qq{1.4};
+my $VERSION            = qq{1.5};
 my $TEMP_DIR           = "/tmp";
 my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
@@ -76,6 +77,7 @@ words that exist within scripts.
  -i: Create an index of search terms. Checks in $HOME dirs recursively.
  -I{dir1 dir2 dirN}: Create an index of search terms, recursively from specified directories.
  -M: Show ranking, pipe delimited on output to STDOUT.
+ -s{exp}: Include this 'find' globbing expression for additional search params other than '*.sh' and '*.pl'.
  -x: This (help) message.
 
 example:
@@ -83,6 +85,7 @@ example:
   searchme.pl -I"/s/sirsi/Unicorn/EPLwork/anisbet /s/sirsi/Unicorn/Bincustom" # to build an inverted index from here.
   searchme.pl -?password # Show all the scripts that contain the word 'password'.
   searchme.pl -?"juv soleil" # only files that contain all terms are output.
+  searchme.pl -I"." -s"[R,r]eadme*.[t,m]*"    # search current directory and include search for files that match expression.
 Version: $VERSION
 EOF
     exit;
@@ -156,6 +159,7 @@ sub create_inverted_index( $ )
 			printf STDERR "indexing directory: '%s'\n", $dir if ( $opt{'D'} );
 			$results .= `find $dir -name "*.sh"`;
 			$results .= `find $dir -name "*.pl"`;
+			$results .= `find $dir -name "$opt{'s'}"` if ( $opt{'s'} );
 		}
 		else
 		{
@@ -266,7 +270,7 @@ sub do_search( $$ )
 # return: 
 sub init
 {
-    my $opt_string = 'DiI:Mx?:';
+    my $opt_string = 'DiI:s:Mx?:';
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
 	if ( $opt{'i'} )
