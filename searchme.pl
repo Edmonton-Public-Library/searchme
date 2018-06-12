@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          1.6 - Show top searches and optionally additional.
 #          1.5 - Introduce special file selection types with -s.
 #          1.4 - Fix multiple start directories selection.
 #          1.3 - Change how to specify multiple start directories.
@@ -46,7 +47,7 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-my $VERSION            = qq{1.5};
+my $VERSION            = qq{1.6};
 my $TEMP_DIR           = "/tmp";
 my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
