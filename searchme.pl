@@ -64,7 +64,7 @@ sub usage()
 {
     print STDERR << "EOF";
 
-	usage: $0 [-DiI{dirs}Mx?{search terms}]
+	usage: $0 [-DiI{dirs}Mm{n}x?{search terms}]
 Allows search of any keywords from scripts (*.sh and *.pl).
 
 An inverted index is created, if one doesn't already exist in $TEMP_DIR, or the -i, or -I 
