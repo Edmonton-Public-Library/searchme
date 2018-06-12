@@ -27,6 +27,8 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          1.7 - Improve ranking - results are too broad.
+#          1.6 - Show top searches and optionally additional.
 #          1.5 - Introduce special file selection types with -s.
 #          1.4 - Fix multiple start directories selection.
 #          1.3 - Change how to specify multiple start directories.
@@ -46,13 +48,14 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-my $VERSION            = qq{1.5};
+my $VERSION            = qq{1.7};
 my $TEMP_DIR           = "/tmp";
 my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
 my $MASTER_INV_FILE    = "$TEMP_DIR/search_inverted_index.idx";
 chomp( my $HOME        = `env | egrep -e '^HOME=' | pipe.pl -W'=' -oc1` ); # Where to start the search.
 my @SEARCH_DIRS        = ();
+my $MAX_RESULTS        = 10;
 
 #
 # Message about this program and how to use it.
@@ -76,6 +79,7 @@ words that exist within scripts.
  -D: Debug mode. Prints additional information to STDERR.
  -i: Create an index of search terms. Checks in $HOME dirs recursively.
  -I{dir1 dir2 dirN}: Create an index of search terms, recursively from specified directories.
+ -m{hits}: Limit output to a specific number of results.
  -M: Show ranking, pipe delimited on output to STDOUT.
  -s{exp}: Include this 'find' globbing expression for additional search params other than '*.sh' and '*.pl'.
  -x: This (help) message.
@@ -253,8 +257,11 @@ sub do_search( $$ )
 	{
 		if ( $reverse_inverted_index->{ $key } >= scalar @queries )
 		{
-			printf "%d|", $reverse_inverted_index->{ $key } if ( $opt{'M'} );
-			printf "%s\n", $key;
+			if ( $count < $MAX_RESULTS )
+			{
+				printf "%d|", $reverse_inverted_index->{ $key } if ( $opt{'M'} );
+				printf "%s\n", $key;
+			}
 			$count++;
 		}
 		else
@@ -270,7 +277,7 @@ sub do_search( $$ )
 # return: 
 sub init
 {
-    my $opt_string = 'DiI:s:Mx?:';
+    my $opt_string = 'DiI:s:Mm:x?:';
     getopts( "$opt_string", \%opt ) or usage();
     usage() if ( $opt{'x'} );
 	if ( $opt{'i'} )
@@ -283,6 +290,7 @@ sub init
 		push @SEARCH_DIRS, split( '\s+', $opt{'I'} );
 		create_inverted_index( $MASTER_HASH_TABLE );
 	}
+	$MAX_RESULTS = $opt{'m'} if ( $opt{'m'} );
 }
 
 init();
