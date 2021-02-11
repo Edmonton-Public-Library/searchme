@@ -27,6 +27,7 @@
 # Author:  Andrew Nisbet, Edmonton Public Library
 # Created: Mon Feb 26 14:02:21 MST 2018
 # Rev: 
+#          1.7.01 - Change HOME to WORKING_DIR.
 #          1.7 - Improve ranking - results are too broad.
 #          1.6 - Show top searches and optionally additional.
 #          1.5 - Introduce special file selection types with -s.
@@ -48,12 +49,12 @@ use warnings;
 use vars qw/ %opt /;
 use Getopt::Std;
 
-my $VERSION            = qq{1.7};
+my $VERSION            = qq{1.7.01};
 my $TEMP_DIR           = "/tmp";
 my $PIPE               = "pipe.pl";
 my $MASTER_HASH_TABLE  = {};
 my $MASTER_INV_FILE    = "$TEMP_DIR/search_inverted_index.idx";
-chomp( my $HOME        = `env | egrep -e '^HOME=' | pipe.pl -W'=' -oc1` ); # Where to start the search.
+my $WORKING_DIR        = $ENV{'HOME'}; # Where to start the search.
 my @SEARCH_DIRS        = ();
 my $MAX_RESULTS        = 10;
 
@@ -68,7 +69,7 @@ sub usage()
 Allows search of any keywords from scripts (*.sh and *.pl).
 
 An inverted index is created, if one doesn't already exist in $TEMP_DIR, or the -i, or -I 
-flag are specified. If -i is used, search starts in $HOME, which could take a while. Optionally
+flag are specified. If -i is used, search starts in $WORKING_DIR, which could take a while. Optionally
 you can specify a starting directory, and all scripts in that directory and all others
 below it will be indexed.
 
@@ -77,7 +78,7 @@ words that exist within scripts.
 
  -?{term1 term2 termN}: Output files that contain all the search terms in order from most likely to least.
  -D: Debug mode. Prints additional information to STDERR.
- -i: Create an index of search terms. Checks in $HOME dirs recursively.
+ -i: Create an index of search terms. Checks in $WORKING_DIR dirs recursively.
  -I{dir1 dir2 dirN}: Create an index of search terms, recursively from specified directories.
  -m{hits}: Limit output to a specific number of results.
  -M: Show ranking, pipe delimited on output to STDOUT.
@@ -85,7 +86,7 @@ words that exist within scripts.
  -x: This (help) message.
 
 example:
-  searchme.pl -i # to build an inverted index staring in $HOME.
+  searchme.pl -i # to build an inverted index staring in $WORKING_DIR.
   searchme.pl -I"/s/sirsi/Unicorn/EPLwork/anisbet /s/sirsi/Unicorn/Bincustom" # to build an inverted index from here.
   searchme.pl -?password # Show all the scripts that contain the word 'password'.
   searchme.pl -?"juv soleil" # only files that contain all terms are output.
@@ -282,7 +283,7 @@ sub init
     usage() if ( $opt{'x'} );
 	if ( $opt{'i'} )
 	{
-		push @SEARCH_DIRS, $HOME;
+		push @SEARCH_DIRS, $WORKING_DIR;
 		create_inverted_index( $MASTER_HASH_TABLE );
 	}
 	elsif ( $opt{'I'} )
@@ -302,7 +303,7 @@ if ( -s $MASTER_INV_FILE )
 }
 else # Rebuild the index.
 {
-	push @SEARCH_DIRS, $HOME;
+	push @SEARCH_DIRS, $WORKING_DIR;
 	create_inverted_index( $MASTER_HASH_TABLE );
 }
 do_search( $opt{'?'}, $MASTER_HASH_TABLE ) if ( $opt{'?'} );
